@@ -1,8 +1,5 @@
 -- Revenue Recognition Reporting at Invoice Time
 
--- DISCLAIMER: This query uses the Agreement Feed, which is currently in private beta.
--- This query will be changed before General Availability (GA).
-
 -- General note: When executing this query we are assuming that the data ingested in the database is using
 -- two time axes (the valid_from column and the update_date column).
 -- See documentation for more details: https://docs.aws.amazon.com/marketplace/latest/userguide/data-feed.html#data-feed-details
@@ -525,6 +522,9 @@ from invoiced_transactions inv
     -- if you want to get current product title, replace the next join with: left join products_with_latest_revision p on p.product_id = inv.product_id
     join products_with_history p on p.product_id = inv.product_id and (inv.invoice_date_as_date >= p.valid_from  and inv.invoice_date_as_date < p.valid_to)
 
+
+    -- TODO /!\ problem between invoice_date which is < account.valid_from!! -> cannot make it an inner join now
+    --   -> change this when https://code.amazon.com/reviews/CR-52453819 is pushed
     left join accounts_with_history_with_company_name acc_payer on inv.payer_account_id = acc_payer.account_id
                                                                     and (inv.invoice_date_as_date >= acc_payer.valid_from  and inv.invoice_date_as_date < acc_payer.valid_to)
     -- left join because end_user_account_id is nullable (eg if the invoice is originated from a reseller)
@@ -533,7 +533,7 @@ from invoiced_transactions inv
 
     -- TODO left join because agreement feed is not GA yet and not 100% backfilled yet -> will be moved to INNER join after backfill
     left join agreements_with_history agg on agg.agreement_id = inv.agreement_id and (inv.invoice_date_as_date >= agg.valid_from  and inv.invoice_date_as_date < agg.valid_to)
-
+    -- TODO left join because of the account history bug -> will move to inner join when fixed (and agreements are backfilled)
     left join accounts_with_history_with_company_name acc_reseller on agg.proposer_account_id = acc_reseller.account_id
                                                                         and (inv.invoice_date_as_date >= acc_reseller.valid_from  and inv.invoice_date_as_date < acc_reseller.valid_to)
     -- if you want to get current offer name, replace the next join with: left join offer_targets_with_latest_revision_with_target_type off on agg.offer_id = off.offer_id
@@ -542,4 +542,5 @@ from invoiced_transactions inv
 
 )
 select * from revenue_recognition_at_invoice_time
--- if you want to filter on a specific month, simply do: where "Invoice Date" between '2021-04-01' and '2021-04-30'
+-- To filter on a specific month, uncomment the following and replace the dates:
+-- where "Invoice Date" between '2021-04-01' and '2021-04-30'
